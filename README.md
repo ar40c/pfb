@@ -1,48 +1,81 @@
 # signal40
 
-Monitors a Solana account for token transfers via Helius WebSocket and sends alerts to a Telegram group.
+Monitors Solana accounts for token transfers and sends real-time alerts to a Telegram group.
 
-## Setup
+## Bot Commands
 
-1. Install dependencies:
+Once the bot is running in your Telegram group, you can use these commands:
 
-```bash
-bun install
-```
-
-2. Copy `.env.example` to `.env` and fill in your values:
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Description |
+| Command | Description |
 |---|---|
-| `HELIUS_API_KEY` | API key from [helius.dev](https://www.helius.dev/) |
-| `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather) |
-| `TELEGRAM_CHAT_ID` | Chat/group ID (negative number for groups) |
+| `/status` | Check if the bot is online, see uptime and watched accounts |
+| `/add <address>` | Start watching a Solana account |
+| `/remove <address>` | Stop watching a Solana account |
+| `/list` | Show all currently watched accounts |
 
-To get your chat ID: add the bot to your group, send a message, then visit `https://api.telegram.org/bot<TOKEN>/getUpdates` and look for the `chat.id` field.
+## Getting your own copy
 
-3. Run locally:
+1. Install [Git](https://git-scm.com/downloads) if you don't have it
+2. Clone this repo:
 
 ```bash
-bun src/index.ts
+git clone https://github.com/carpntr/signal40.git
+cd signal40
 ```
 
-## Telegram webhook
+3. Create your own repo on [GitHub](https://github.com/new) (name it whatever you like, set it to private)
+4. Point your local copy to your new repo:
 
-After deploying, set the webhook so the bot can respond to `/status` commands:
-
-```
-https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<your-domain>/webhook
+```bash
+git remote set-url origin https://github.com/<YOUR_USERNAME>/<YOUR_REPO_NAME>.git
+git push
 ```
 
 ## Deploy to Railway
 
-1. Push this repo to GitHub
-2. Connect the repo in [Railway](https://railway.app/)
-3. Add your env vars in the Railway dashboard
-4. Set the Telegram webhook to your Railway domain
+1. Sign up at [Railway](https://railway.app/) and create a new project from your GitHub repo
+3. Add the following environment variables in the Railway dashboard:
 
-To share: others can fork the repo, deploy to their own Railway account, and set their own env vars.
+| Variable | Description | How to get it |
+|---|---|---|
+| `HELIUS_API_KEY` | Solana RPC provider | Sign up at [helius.dev](https://www.helius.dev/) and copy your API key |
+| `TELEGRAM_BOT_TOKEN` | Your Telegram bot token | Message [@BotFather](https://t.me/BotFather) on Telegram, send `/newbot`, and follow the prompts |
+| `TELEGRAM_CHAT_ID` | The group chat to send alerts to | See [Getting your Chat ID](#getting-your-chat-id) below |
+| `PORT` | Server port (optional) | Set to `3000` if Railway doesn't assign one automatically |
+
+4. In Railway, go to **Settings → Networking → Public Networking** and generate a domain (use port `3000`)
+5. Connect the Telegram webhook by visiting this URL in your browser (replace the placeholders):
+
+```
+https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://<YOUR_RAILWAY_DOMAIN>/webhook
+```
+
+You should see `{"ok":true}`. That's it — send `/status` in your group to verify.
+
+### Persisting data across restarts
+
+By default, the watched account list resets on each deploy. To keep it:
+
+1. In Railway, go to **Settings → Volumes → Add Volume**
+2. Set the mount path to `/data`
+3. Choose 1 GB (the minimum — costs $0.25/month)
+
+### Getting your Chat ID
+
+1. Add your bot to the Telegram group
+2. Go to **@BotFather → /mybots → your bot → Bot Settings → Group Privacy → Turn off**
+3. Send any message in the group
+4. Visit `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates` in your browser
+5. Look for `"chat":{"id":-100XXXXXXXXXX}` — that negative number is your chat ID
+
+## Local Development
+
+Requires [Bun](https://bun.sh/).
+
+```bash
+bun install
+cp .env.example .env   # fill in your values
+bun src/index.ts
+```
+
+Note: the `/status` and other bot commands only work when the Telegram webhook is pointed at your server. For local testing, you can use a tool like [ngrok](https://ngrok.com/) to expose your local server.
