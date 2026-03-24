@@ -230,9 +230,6 @@ Bun.serve({
         const text: string = update?.message?.text ?? "";
 
         if (text) {
-          console.log(
-            `Telegram message from ${update?.message?.from?.username ?? "unknown"}: ${text}`,
-          );
           await handleCommand(text);
         }
 
