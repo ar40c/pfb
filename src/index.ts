@@ -13,7 +13,7 @@ const DATA_FILE = "data/accounts.json";
 function loadAccounts(): Set<string> {
   return new Set(["5v7ZZg1D1si417WhUQF9Br2dRQEnd1sTbCfesscUCVKE",
                   "9UcygiamY92yGntGkUkBKi4SdApxkBMZd9QSo6wMC2dN",
-                  "GhFaBi8sy3M5mgG97YguQ6J3f7XH4JwV5CoW8MbzRgAU"
+                  "GhFaBi8sy3M5mgG97YguQ6J3f7XH4JwV5CoW8MbzRgAU",
                  ]);
 }
 
