@@ -11,12 +11,6 @@ const DATA_FILE = "data/accounts.json";
 // --- Account persistence ---
 
 function loadAccounts(): Set<string> {
-  if (existsSync(DATA_FILE)) {
-    const raw = JSON.parse(
-      require("node:fs").readFileSync(DATA_FILE, "utf-8"),
-    );
-    return new Set(Array.isArray(raw) ? raw : []);
-  }
   return new Set(["5v7ZZg1D1si417WhUQF9Br2dRQEnd1sTbCfesscUCVKE",
                   "9UcygiamY92yGntGkUkBKi4SdApxkBMZd9QSo6wMC2dN",
                   "GhFaBi8sy3M5mgG97YguQ6J3f7XH4JwV5CoW8MbzRgAU"
@@ -24,7 +18,7 @@ function loadAccounts(): Set<string> {
 }
 
 async function saveAccounts() {
-  await Bun.write(DATA_FILE, JSON.stringify([...watchedAccounts]));
+  // accounts are managed in index.ts, no-op
 }
 
 const watchedAccounts = loadAccounts();
