@@ -70,6 +70,24 @@ function subscribeToAccount(socket: WebSocket, account: string) {
   console.log(`Subscribing to ${account} (req ${reqId})`);
 }
 
+function unsubscribeFromAccount(socket: WebSocket, account: string) {
+  for (const [subId, acct] of subscriptionIds) {
+    if (acct === account) {
+      socket.send(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: nextReqId++,
+          method: "logsUnsubscribe",
+          params: [subId],
+        }),
+      );
+      subscriptionIds.delete(subId);
+      console.log(`Unsubscribed from ${account} (sub ${subId})`);
+      return;
+    }
+  }
+}
+
 function connect() {
   console.log("Connecting to Helius WebSocket...");
   const socket = new WebSocket(HELIUS_WS_URL);
@@ -191,9 +209,10 @@ async function handleCommand(text: string) {
       }
       watchedAccounts.delete(address);
       await saveAccounts();
-      // Unsubscribe requires reconnect since Solana WS doesn't support unsubscribe by account
-      // The subscription will be dropped on next reconnect
-      await sendTelegram(`Removed <code>${address}</code>. Will take effect on next reconnect.`);
+      if (ws && wsConnected) {
+        unsubscribeFromAccount(ws, address);
+      }
+      await sendTelegram(`Removed <code>${address}</code>`);
       break;
     }
 
