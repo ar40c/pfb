@@ -1,15 +1,40 @@
+import { existsSync } from "node:fs";
+
 const HELIUS_API_KEY = process.env.HELIUS_API_KEY!;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID!;
-
-const WATCHED_ACCOUNT = "5v7ZZg1D1si417WhUQF9Br2dRQEnd1sTbCfesscUCVKE";
 const WATCHED_TOKEN = "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn";
-
 const HELIUS_WS_URL = `wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
 const PORT = parseInt(process.env.PORT || "3000");
+const DATA_FILE = "data/accounts.json";
 
+// --- Account persistence ---
+
+function loadAccounts(): Set<string> {
+  if (existsSync(DATA_FILE)) {
+    const raw = JSON.parse(
+      require("node:fs").readFileSync(DATA_FILE, "utf-8"),
+    );
+    return new Set(Array.isArray(raw) ? raw : []);
+  }
+  return new Set(["5v7ZZg1D1si417WhUQF9Br2dRQEnd1sTbCfesscUCVKE"]);
+}
+
+async function saveAccounts() {
+  await Bun.write(DATA_FILE, JSON.stringify([...watchedAccounts]));
+}
+
+const watchedAccounts = loadAccounts();
+
+// --- State ---
+
+let ws: WebSocket | null = null;
 let wsConnected = false;
 let lastTransferAt: Date | null = null;
+const subscriptionIds = new Map<number, string>(); // sub id -> account
+let nextReqId = 1;
+
+// --- Telegram ---
 
 async function sendTelegram(message: string) {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
@@ -27,37 +52,57 @@ async function sendTelegram(message: string) {
   }
 }
 
+// --- WebSocket ---
+
+const pendingSubscriptions = new Map<number, string>(); // req id -> account
+
+function subscribeToAccount(socket: WebSocket, account: string) {
+  const reqId = nextReqId++;
+  pendingSubscriptions.set(reqId, account);
+  socket.send(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: reqId,
+      method: "logsSubscribe",
+      params: [{ mentions: [account] }, { commitment: "confirmed" }],
+    }),
+  );
+  console.log(`Subscribing to ${account} (req ${reqId})`);
+}
+
 function connect() {
   console.log("Connecting to Helius WebSocket...");
-  const ws = new WebSocket(HELIUS_WS_URL);
+  const socket = new WebSocket(HELIUS_WS_URL);
 
-  ws.addEventListener("open", () => {
+  socket.addEventListener("open", () => {
     wsConnected = true;
-    console.log("Connected. Subscribing to logs for", WATCHED_ACCOUNT);
-    ws.send(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "logsSubscribe",
-        params: [{ mentions: [WATCHED_ACCOUNT] }, { commitment: "confirmed" }],
-      }),
-    );
+    ws = socket;
+    subscriptionIds.clear();
+    console.log(`Connected. Subscribing to ${watchedAccounts.size} account(s)...`);
+    for (const account of watchedAccounts) {
+      subscribeToAccount(socket, account);
+    }
   });
 
-  ws.addEventListener("message", async (event) => {
+  socket.addEventListener("message", async (event) => {
     const data = JSON.parse(String(event.data));
 
     // Subscription confirmation
-    if (data.id === 1) {
-      console.log("Subscribed, subscription id:", data.result);
+    if (data.id && data.result !== undefined) {
+      const account = pendingSubscriptions.get(data.id);
+      if (account) {
+        subscriptionIds.set(data.result, account);
+        pendingSubscriptions.delete(data.id);
+        console.log(`Subscribed to ${account} (sub ${data.result})`);
+      }
       return;
     }
 
     const logs: string[] = data?.params?.result?.value?.logs ?? [];
     const signature: string = data?.params?.result?.value?.signature ?? "";
     const err = data?.params?.result?.value?.err;
+    const subId: number = data?.params?.subscription;
 
-    // Skip failed transactions
     if (err) return;
 
     const involvesToken = logs.some((log: string) =>
@@ -65,37 +110,114 @@ function connect() {
     );
     if (!involvesToken) return;
 
+    const account = subscriptionIds.get(subId) ?? "unknown";
     lastTransferAt = new Date();
-    console.log("Detected transfer:", signature);
+    console.log(`Detected transfer for ${account}: ${signature}`);
 
     const message =
       `<b>Transfer detected</b>\n` +
-      `Account: <code>${WATCHED_ACCOUNT}</code>\n` +
+      `Account: <code>${account}</code>\n` +
       `Token: <code>${WATCHED_TOKEN}</code>\n` +
       `<a href="https://solscan.io/tx/${signature}">View on Solscan</a>`;
 
     await sendTelegram(message);
   });
 
-  ws.addEventListener("close", () => {
+  socket.addEventListener("close", () => {
     wsConnected = false;
+    ws = null;
     console.log("WebSocket closed. Reconnecting in 5s...");
     setTimeout(connect, 5000);
   });
 
-  ws.addEventListener("error", (err) => {
+  socket.addEventListener("error", (err) => {
     console.error("WebSocket error:", err);
-    ws.close();
+    socket.close();
   });
 }
 
-// Verify env vars
+// --- Bot commands ---
+
+async function handleCommand(text: string) {
+  const [cmd, ...args] = text.split(" ");
+
+  switch (cmd) {
+    case "/status": {
+      const uptime = Math.floor((Date.now() - startedAt.getTime()) / 1000);
+      const accountList = [...watchedAccounts]
+        .map((a) => `  <code>${a}</code>`)
+        .join("\n");
+      const status = [
+        `<b>signal40 status</b>`,
+        `WebSocket: ${wsConnected ? "connected" : "disconnected"}`,
+        `Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`,
+        `Last transfer: ${lastTransferAt ? lastTransferAt.toISOString() : "none yet"}`,
+        ``,
+        `<b>Watching ${watchedAccounts.size} account(s):</b>`,
+        accountList || "  (none)",
+      ].join("\n");
+      await sendTelegram(status);
+      break;
+    }
+
+    case "/add": {
+      const address = args[0];
+      if (!address) {
+        await sendTelegram("Usage: /add &lt;solana address&gt;");
+        return;
+      }
+      if (watchedAccounts.has(address)) {
+        await sendTelegram(`Already watching <code>${address}</code>`);
+        return;
+      }
+      watchedAccounts.add(address);
+      await saveAccounts();
+      if (ws && wsConnected) {
+        subscribeToAccount(ws, address);
+      }
+      await sendTelegram(`Added <code>${address}</code>`);
+      break;
+    }
+
+    case "/remove": {
+      const address = args[0];
+      if (!address) {
+        await sendTelegram("Usage: /remove &lt;solana address&gt;");
+        return;
+      }
+      if (!watchedAccounts.has(address)) {
+        await sendTelegram(`Not watching <code>${address}</code>`);
+        return;
+      }
+      watchedAccounts.delete(address);
+      await saveAccounts();
+      // Unsubscribe requires reconnect since Solana WS doesn't support unsubscribe by account
+      // The subscription will be dropped on next reconnect
+      await sendTelegram(`Removed <code>${address}</code>. Will take effect on next reconnect.`);
+      break;
+    }
+
+    case "/list": {
+      if (watchedAccounts.size === 0) {
+        await sendTelegram("No accounts being watched.");
+        return;
+      }
+      const list = [...watchedAccounts]
+        .map((a) => `<code>${a}</code>`)
+        .join("\n");
+      await sendTelegram(`<b>Watched accounts:</b>\n${list}`);
+      break;
+    }
+  }
+}
+
+// --- Startup ---
+
 if (!HELIUS_API_KEY || !TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
   console.error("Missing required env vars. Check your .env file.");
   process.exit(1);
 }
 
-// HTTP server for Telegram bot webhook + health check
 const startedAt = new Date();
 
 Bun.serve({
@@ -111,18 +233,7 @@ Bun.serve({
           console.log(
             `Telegram message from ${update?.message?.from?.username ?? "unknown"}: ${text}`,
           );
-        }
-
-        if (text === "/status") {
-          const uptime = Math.floor((Date.now() - startedAt.getTime()) / 1000);
-          const status = [
-            `<b>signal40 status</b>`,
-            `WebSocket: ${wsConnected ? "connected" : "disconnected"}`,
-            `Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`,
-            `Last transfer: ${lastTransferAt ? lastTransferAt.toISOString() : "none yet"}`,
-          ].join("\n");
-
-          await sendTelegram(status);
+          await handleCommand(text);
         }
 
         return new Response("ok");
