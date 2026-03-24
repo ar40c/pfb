@@ -41,7 +41,7 @@ git push
 | `HELIUS_API_KEY` | Solana RPC provider | Sign up at [helius.dev](https://www.helius.dev/) and copy your API key |
 | `TELEGRAM_BOT_TOKEN` | Your Telegram bot token | Message [@BotFather](https://t.me/BotFather) on Telegram, send `/newbot`, and follow the prompts |
 | `TELEGRAM_CHAT_ID` | The group chat to send alerts to | See [Getting your Chat ID](#getting-your-chat-id) below |
-| `PORT` | Server port (optional) | Set to `3000` if Railway doesn't assign one automatically |
+| `PORT` | Server port | Set to `3000` |
 
 4. In Railway, go to **Settings → Networking → Public Networking** and generate a domain (use port `3000`)
 5. Connect the Telegram webhook by visiting this URL in your browser (replace the placeholders):
