@@ -14,6 +14,7 @@ function loadAccounts(): Set<string> {
   return new Set(["5v7ZZg1D1si417WhUQF9Br2dRQEnd1sTbCfesscUCVKE",
                   "9UcygiamY92yGntGkUkBKi4SdApxkBMZd9QSo6wMC2dN",
                   "GhFaBi8sy3M5mgG97YguQ6J3f7XH4JwV5CoW8MbzRgAU",
+                  "8m9THAPeXtJ7e1YJ43Dw4z4pHE9872o9WStgWoSQs2Ds",
                  ]);
 }
 
