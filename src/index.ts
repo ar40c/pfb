@@ -15,8 +15,6 @@ function loadAccounts(): Set<string> {
                   "9UcygiamY92yGntGkUkBKi4SdApxkBMZd9QSo6wMC2dN",
                   "GhFaBi8sy3M5mgG97YguQ6J3f7XH4JwV5CoW8MbzRgAU",
                   "8m9THAPeXtJ7e1YJ43Dw4z4pHE9872o9WStgWoSQs2Ds",
-                  "7TWnq4WeYcwQWBCwKeEX2Q9xqVtthPGkB7adNvueuVuh",
-                  "6LY1JzAFVZsP2a2xKrtU6znQMQ5h4i7tocWdgrkZzkzF",
                   "9CKnC2kmqG9ZBtQXDfxR5H7Av7X878geV367DdYtybT4",
                   "8UHpWBnhYNeAQURWjAABp8vSrzfYa69o7sfi65vYLC42",
                   "3Z2AqcKCmdcCZ3iCUiFKtwUbrmuPcefwN3xRLTdY7XyN",
